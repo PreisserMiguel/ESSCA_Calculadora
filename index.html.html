@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESSCA - Convertidor de Coordenadas</title>
+    <!-- Mapas Leaflet -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- Tipografías: Inter (UI), Yeseva One (Logo), DM Serif Display (Lema) -->
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:wght@400;500;600;700;800&family=Yeseva+One&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --bg-body: #f1f5f9;
+            --bg-container: rgba(255, 255, 255, 0.95);
+            --text-main: #0f172a;
+            --text-muted: #64748b;
+            --primary: #0f172a;
+            --secondary: #0070c0; /* Azul ESSCA */
+            --accent: #3b82f6;
+            --border: #cbd5e1;
+            --card-inner: #f8fafc;
+            --success-bg: #f0fdf4;
+            --success-text: #166534;
+            --success-border: #bbf7d0;
+            --warning-bg: #fffbeb;
+            --warning-text: #78350f;
+            --warning-border: #fef3c7;
+            --shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.04);
+            --glow: 0 0 0 4px rgba(0, 112, 192, 0.2);
+        }
+
+        [data-theme="dark"] {
+            --bg-body: #020617;
+            --bg-container: rgba(15, 23, 42, 0.95);
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --primary: #ffffff;
+            --secondary: #3b82f6;
+            --accent: #60a5fa;
+            --border: #334155;
+            --card-inner: #1e293b;
+            --success-bg: #064e3b;
+            --success-text: #6ee7b7;
+            --success-border: #047857;
+            --warning-bg: #78350f;
+            --warning-text: #fef3c7;
+            --warning-border: #92400e;
+            --glow: 0 0 0 4px rgba(59, 130, 246, 0.25);
+        }
+
+        /* --- SPLASH SCREEN ANIMATION (CINEMATIC) --- */
+        #splash-screen {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: radial-gradient(circle at center, #1e293b 0%, #020617 100%);
+            z-index: 99999;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            transition: opacity 0.8s ease-in-out, visibility 0.8s;
+            overflow: hidden;
+        }
+
+        /* Fondo espacial muy sutil */
+        #splash-screen::before {
+            content: "";
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-image: radial-gradient(#ffffff 1px, transparent 1px);
+            background-size: 40px 40px;
+            opacity: 0.08;
+            z-index: 0;
+            animation: drift 20s linear infinite;
+        }
+
+        @keyframes drift { from { transform: translateY(0) } to { transform: translateY(-40px) } }
+
+        .splash-logo-wrapper {
+            position: relative;
+            z-index: 1;
+            padding: 20px;
+        }
+
+        .splash-word {
+            position: relative;
+            z-index: 10;
+            font-size: 78px;
+            font-family: 'Yeseva One', serif;
+            letter-spacing: 4px;
+            display: flex;
+            align-items: baseline;
+            text-shadow: 0 4px 15px rgba(0,0,0,0.8);
+            /* Clipping para el efecto de barrido de luz */
+            overflow: hidden;
+            padding: 10px 20px;
+        }
+
+        .splash-e, .splash-c, .splash-a { 
+            color: #ffffff; 
+            opacity: 0; 
+        }
+        
+        .splash-s1, .splash-s2 {
+            color: var(--secondary);
+            text-shadow: 0 0 30px rgba(0, 112, 192, 0.8);
+            opacity: 0;
+        }
+
+        /* Coreografía Cinematográfica */
+        .splash-s1 { animation: cinematicFocus 1.2s cubic-bezier(0.2, 0.8, 0.2, 1) 0.3s forwards; }
+        .splash-s2 { animation: cinematicFocus 1.2s cubic-bezier(0.2, 0.8, 0.2, 1) 0.45s forwards; }
+
+        /* Las letras exteriores nacen y se deslizan a sus posiciones */
+        .splash-e { animation: revealE 1s cubic-bezier(0.2, 0.8, 0.2, 1) 1.4s forwards; }
+        .splash-c { animation: revealCA 1s cubic-bezier(0.2, 0.8, 0.2, 1) 1.5s forwards; }
+        .splash-a { animation: revealCA 1s cubic-bezier(0.2, 0.8, 0.2, 1) 1.6s forwards; }
+
+        /* Efecto de lente y asentamiento para las SS */
+        @keyframes cinematicFocus {
+            0% { opacity: 0; filter: blur(15px); transform: scale(1.15); }
+            100% { opacity: 1; filter: blur(0); transform: scale(1); }
+        }
+
+        /* Deslizamiento de expansión */
+        @keyframes revealE {
+            0% { opacity: 0; filter: blur(10px); transform: translateX(30px); }
+            100% { opacity: 1; filter: blur(0); transform: translateX(0); }
+        }
+        @keyframes revealCA {
+            0% { opacity: 0; filter: blur(10px); transform: translateX(-30px); }
+            100% { opacity: 1; filter: blur(0); transform: translateX(0); }
+        }
+
+        /* Barrido de luz estelar */
+        .light-sweep {
+            position: absolute;
+            top: -20%; left: -50%;
+            width: 30%; height: 140%;
+            background: linear-gradient(to right, transparent, rgba(255,255,255,0.7), transparent);
+            transform: skewX(-25deg);
+            animation: sweep 1.2s cubic-bezier(0.4, 0, 0.2, 1) 1.2s forwards;
+            z-index: 20;
+            pointer-events: none;
+            opacity: 0;
+            mix-blend-mode: overlay;
+        }
+
+        @keyframes sweep {
+            0% { left: -50%; opacity: 0; }
+            20% { opacity: 1; }
+            80% { opacity: 1; }
+            100% { left: 120%; opacity: 0; }
+        }
+
+        .splash-subtitle {
+            margin-top: 5px;
+            font-size: 21px;
+            color: #cbd5e1;
+            font-family: 'DM Serif Display', serif;
+            letter-spacing: 1.5px;
+            opacity: 0;
+            animation: fadeInText 1.2s ease 2.2s forwards;
+            text-align: center;
+            max-width: 90%;
+            z-index: 10;
+        }
+
+        @keyframes fadeInText { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* --- ESTILOS GLOBALES DE LA APP --- */
+        body { font-family: 'Inter', -apple-system, sans-serif; background-color: var(--bg-body); background-image: radial-gradient(var(--border) 1px, transparent 1px); background-size: 20px 20px; background-attachment: fixed; color: var(--text-main); line-height: 1.6; margin: 0; padding: 16px; display: flex; justify-content: center; align-items: center; min-height: 100vh; box-sizing: border-box; transition: background-color 0.4s ease, color 0.4s ease; }
+        .container { background: var(--bg-container); backdrop-filter: blur(12px); padding: 36px; border-radius: 30px; box-shadow: var(--shadow); border: 1px solid rgba(255, 255, 255, 0.4); width: 100%; max-width: 800px; box-sizing: border-box; position: relative; }
+        [data-theme="dark"] .container { border: 1px solid rgba(255,255,255,0.05); }
+
+        .theme-toggle { position: absolute; top: 24px; right: 24px; background: var(--card-inner); border: 1px solid var(--border); padding: 10px 14px; border-radius: 12px; cursor: pointer; font-size: 12px; font-weight: 700; color: var(--text-main); transition: all 0.3s ease; z-index: 10; display: flex; align-items: center; gap: 6px; }
+        .theme-toggle:hover { box-shadow: var(--shadow); transform: translateY(-1px); }
+        .theme-toggle:active { transform: scale(0.95); }
+        .theme-toggle:focus-visible { outline: none; box-shadow: var(--glow); }
+
+        .icon { width: 18px; height: 18px; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; fill: none; }
+
+        .header { margin-bottom: 28px; border-bottom: 2px solid var(--border); padding-bottom: 20px; padding-top: 5px; }
+        .header-top { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 12px; }
+        .logo-wrapper img { max-width: 150px; height: auto; }
+        .logo-dark { display: none; }
+        [data-theme="dark"] .logo-light { display: none; }
+        [data-theme="dark"] .logo-dark { display: block; }
+        
+        .author { font-size: 14px; color: var(--text-muted); font-weight: 700; text-align: right; padding-bottom: 8px; padding-right: 130px; }
+        .header-bottom { text-align: center; }
+        h1 { color: var(--primary); font-size: 26px; margin: 10px 0 0 0; font-weight: 800; letter-spacing: -0.5px; }
+
+        .tabs-nav { display: flex; background: var(--border); padding: 4px; border-radius: 16px; margin-bottom: 28px; gap: 4px; }
+        .tab-btn { flex: 1; padding: 14px; background: transparent; border: none; font-size: 14px; font-weight: 700; color: var(--text-muted); cursor: pointer; border-radius: 12px; transition: all 0.3s ease; }
+        .tab-btn:hover { color: var(--text-main); }
+        .tab-btn:focus-visible { outline: none; box-shadow: var(--glow); }
+        .tab-btn.active { background: var(--bg-container); color: var(--secondary); box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08); }
+
+        .tab-content { display: none; }
+        .tab-content.active { display: block; animation: fadeSlideUp 0.4s forwards; }
+        @keyframes fadeSlideUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+
+        .format-selector { display: flex; gap: 16px; margin-bottom: 20px; padding: 12px 16px; background: var(--card-inner); border-radius: 14px; border: 1px solid var(--border); }
+        .format-selector label { font-weight: 600; font-size: 14px; cursor: pointer; display: flex; align-items: center; gap: 8px; }
+
+        .grid-inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+        .dms-container { margin-bottom: 12px; }
+        .dms-header { display: grid; grid-template-columns: 1fr 1fr 1fr 65px; gap: 8px; font-size: 11px; font-weight: 700; color: var(--text-muted); text-align: center; margin-bottom: 6px; }
+        .dms-grid { display: grid; grid-template-columns: 1fr 1fr 1fr 65px; gap: 8px; }
+
+        label { display: block; margin-bottom: 8px; font-weight: 600; font-size: 14px; color: var(--primary); }
+
+        input[type="text"], select { width: 100%; padding: 14px 16px; border: 2px solid var(--border); border-radius: 14px; font-size: 16px; font-family: 'Inter', sans-serif; box-sizing: border-box; background-color: var(--bg-body); color: var(--text-main); transition: all 0.3s ease; outline: none; }
+        .dms-grid input[type="text"] { padding: 14px 8px; text-align: center; font-variant-numeric: tabular-nums; }
+        .dms-grid select { padding: 14px 4px; font-weight: 700; text-align: center; cursor: pointer;}
+        input[type="text"]:focus, select:focus { border-color: var(--secondary); background-color: var(--bg-container); box-shadow: var(--glow); }
+
+        .btn-group { display: flex; gap: 14px; margin-top: 14px; }
+        button { font-family: 'Inter', sans-serif; transition: all 0.2s ease; outline: none; display: flex; align-items: center; justify-content: center; gap: 8px;}
+        button:active { transform: scale(0.96); }
+        button:focus-visible { box-shadow: var(--glow); } 
+
+        button.btn-main { flex: 2; padding: 16px; border: none; border-radius: 14px; font-size: 16px; font-weight: 700; cursor: pointer; background-color: var(--secondary); color: white; }
+        button.btn-main:hover { background-color: #1d4ed8; box-shadow: 0 6px 15px rgba(29, 78, 216, 0.25); transform: translateY(-2px); }
+        button.btn-clear { flex: 1; padding: 16px; border: 2px solid var(--border); border-radius: 14px; font-size: 15px; font-weight: 700; cursor: pointer; background-color: transparent; color: var(--text-muted); }
+        button.btn-clear:hover { background-color: var(--bg-body); color: var(--text-main); }
+
+        .error-box { background-color: #fef2f2; color: #b91c1c; padding: 16px; border-radius: 14px; margin-top: 20px; display: none; font-size: 14px; border: 1px solid #fecaca; }
+
+        .output-section { display: none; margin-top: 36px; animation: fadeSlideUp 0.5s forwards; }
+        .result-banner { background-color: var(--success-bg); color: var(--success-text); border: 1px solid var(--success-border); display: flex; align-items: center; justify-content: center; gap: 8px; font-weight: 800; font-size: 15px; padding: 16px; border-radius: 14px; margin-bottom: 24px; }
+        .location-badge { background-color: var(--card-inner); border: 1px solid var(--border); padding: 18px 20px; border-radius: 16px; margin-bottom: 24px; display: flex; flex-direction: column; gap: 14px; }
+
+        .btn-copy-full { background: var(--primary); color: var(--bg-container); border: none; padding: 12px; border-radius: 10px; font-size: 14px; font-weight: 700; cursor: pointer; width: 100%; }
+        .btn-copy-full:hover { opacity: 0.9; transform: translateY(-1px); }
+
+        .results-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 24px; }
+        .column-card { background: var(--bg-container); border: 2px solid var(--border); border-radius: 20px; padding: 24px; display: flex; flex-direction: column; justify-content: space-between; transition: all 0.3s ease;}
+        .column-card:hover { border-color: var(--secondary); box-shadow: var(--shadow); }
+
+        .column-title { font-size: 14px; font-weight: 800; color: var(--secondary); margin-top: 0; margin-bottom: 18px; border-bottom: 2px solid var(--border); padding-bottom: 10px; }
+        .data-label { font-size: 12px; color: var(--text-muted); margin: 6px 0 2px 0; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;}
+        .data-value { font-variant-numeric: tabular-nums; font-size: 18px; font-weight: 800; margin: 0 0 12px 0; color: var(--primary); }
+        .dms-val { font-size: 15px; color: var(--text-muted); margin-bottom: 16px; font-weight: 600;}
+
+        .btn-copy-card { background: var(--card-inner); border: 1px solid var(--border); color: var(--text-main); font-size: 13px; font-weight: 700; padding: 12px; border-radius: 10px; cursor: pointer; width: 100%; margin-top: auto; }
+        .btn-copy-card:hover { background-color: var(--border); }
+
+        .app-shortcut-box { background-color: var(--card-inner); border: 2px dashed var(--border); padding: 16px 20px; border-radius: 16px; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center; transition: all 0.3s ease; }
+        .app-shortcut-box:hover { border-color: var(--text-muted); background-color: var(--bg-body); }
+        .app-info h4 { margin: 0 0 6px 0; font-size: 13px; color: var(--text-muted); }
+        .app-info span { font-variant-numeric: tabular-nums; font-size: 15px; font-weight: 700; }
+        
+        .action-group { display: flex; gap: 8px; }
+        .badge-action { font-size: 12px; font-weight: 700; padding: 8px 14px; border-radius: 8px; cursor: pointer; border: none; }
+        .btn-open { background: var(--accent); color: white; }
+        .btn-open:hover { opacity: 0.9; }
+        .btn-copy { background: var(--border); color: var(--text-main); }
+        .btn-copy:hover { filter: brightness(0.9); }
+
+        .map-container-wrapper { position: relative; margin-top: 24px; }
+        #map-preview { height: 320px; width: 100%; border-radius: 20px; border: 2px solid var(--border); margin-top: 10px; z-index: 1; }
+        .btn-recenter { position: absolute; top: 25px; right: 15px; background: rgba(255, 255, 255, 0.95); color: #0f172a; border: 1px solid #cbd5e1; padding: 8px 14px; border-radius: 10px; font-size: 12px; font-weight: 800; cursor: pointer; z-index: 1000; display: flex; align-items: center; gap: 6px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);}
+        .btn-recenter:hover { background: white; transform: translateY(-1px); }
+
+        .footer { text-align: center; margin-top: 40px; font-size: 13px; color: var(--text-muted); font-weight: 500; }
+
+        @media (max-width: 600px) {
+            body { padding: 8px; }
+            .container { padding: 24px 16px; border-radius: 24px; }
+            .theme-toggle { top: 16px; right: 16px; }
+            .header-top { flex-direction: column; align-items: center; gap: 12px; margin-bottom: 16px; }
+            .author { padding-right: 0; text-align: center; }
+            h1 { font-size: 22px; }
+            .grid-inputs { grid-template-columns: 1fr; gap: 16px; margin-bottom: 16px; }
+            .btn-group { flex-direction: column-reverse; }
+            .results-columns { grid-template-columns: 1fr; }
+            .app-shortcut-box { flex-direction: column; align-items: flex-start; gap: 14px; }
+            .action-group { width: 100%; justify-content: flex-start; }
+            .badge-action { flex: 1; text-align: center; justify-content: center; }
+            .dms-header { grid-template-columns: 1fr 1fr 1fr 50px; font-size: 10px;}
+            .dms-grid { grid-template-columns: 1fr 1fr 1fr 50px; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- PANTALLA DE CARGA (SPLASH SCREEN) ANIMADA CINEMATOGRÁFICA -->
+<div id="splash-screen">
+    <div class="splash-logo-wrapper">
+        <div class="splash-word">
+            <span class="splash-e">E</span>
+            <span class="splash-s1">S</span>
+            <span class="splash-s2">S</span>
+            <span class="splash-c">C</span>
+            <span class="splash-a">A</span>
+            <!-- Capa del efecto de barrido de luz -->
+            <div class="light-sweep"></div>
+        </div>
+    </div>
+    <div class="splash-subtitle">Expertos en Sistemas Satelitales y Cartografía</div>
+</div>
+
+<div class="container">
+    <button class="theme-toggle" onclick="toggleTheme()">
+        <svg class="icon" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        <span>Oscuro</span>
+    </button>
+
+    <header class="header">
+        <div class="header-top">
+            <div class="logo-wrapper">
+                <img src="ESSCA_PERFIL-removebg-preview.png" alt="ESSCA Logo" class="logo-light">
+                <img src="ESSCA_PERFIL_CON_Expertos_en-removebg-preview.png" alt="ESSCA Logo" class="logo-dark">
+            </div>
+            <div class="author">Ing. Miguel Preisser</div>
+        </div>
+        <div class="header-bottom">
+            <h1>Convertidor de Coordenadas WGS84</h1>
+        </div>
+    </header>
+
+    <div class="tabs-nav">
+        <button id="btn-tab-geo" class="tab-btn active" onclick="switchTab('geo2utm')">Geodésicas ➔ UTM</button>
+        <button id="btn-tab-utm" class="tab-btn" onclick="switchTab('utm2geo')">UTM ➔ Geodésicas</button>
+    </div>
+
+    <!-- PESTAÑA: GEODÉSICAS A UTM -->
+    <div id="tab-geo2utm" class="tab-content active">
+        <div class="format-selector">
+            <label><input type="radio" name="geo-format" value="dd" checked onchange="toggleGeoInputFormat()"> Grados Decimales</label>
+            <label><input type="radio" name="geo-format" value="dms" onchange="toggleGeoInputFormat()"> Sexagesimal (G, M, S)</label>
+        </div>
+
+        <div id="input-group-dd" class="grid-inputs">
+            <div>
+                <label for="input-lat">Latitud Decimal (°)</label>
+                <input type="text" id="input-lat" placeholder="Ej: 19.32786" inputmode="decimal" autocomplete="off" onfocus="this.select()">
+            </div>
+            <div>
+                <label for="input-lon">Longitud Decimal (°)</label>
+                <input type="text" id="input-lon" placeholder="Ej: -99.18231" inputmode="decimal" autocomplete="off" onfocus="this.select()">
+            </div>
+        </div>
+
+        <div id="input-group-dms" style="display: none; margin-bottom: 18px;">
+            <div class="dms-container">
+                <label>Latitud (Norte / Sur)</label>
+                <div class="dms-header"><span>Grados (°)</span><span>Minutos (')</span><span>Segundos ('')</span><span>Dir</span></div>
+                <div class="dms-grid">
+                    <input type="text" id="lat-d" placeholder="00" inputmode="decimal" onfocus="this.select()">
+                    <input type="text" id="lat-m" placeholder="00" inputmode="decimal" onfocus="this.select()">
+                    <input type="text" id="lat-s" placeholder="00.000" inputmode="decimal" onfocus="this.select()">
+                    <select id="lat-dir"><option value="1">N</option><option value="-1">S</option></select>
+                </div>
+            </div>
+            <div class="dms-container">
+                <label>Longitud (Este / Oeste)</label>
+                <div class="dms-header"><span>Grados (°)</span><span>Minutos (')</span><span>Segundos ('')</span><span>Dir</span></div>
+                <div class="dms-grid">
+                    <input type="text" id="lon-d" placeholder="00" inputmode="decimal" onfocus="this.select()">
+                    <input type="text" id="lon-m" placeholder="00" inputmode="decimal" onfocus="this.select()">
+                    <input type="text" id="lon-s" placeholder="00.000" inputmode="decimal" onfocus="this.select()">
+                    <select id="lon-dir"><option value="-1" selected>W</option><option value="1">E</option></select>
+                </div>
+            </div>
+        </div>
+
+        <div class="btn-group">
+            <button class="btn-clear" onclick="clearInputs()"><svg class="icon" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 2.1-5.7L21 8"></path><path d="M21 2v6h-6"></path></svg> Limpiar Datos</button>
+            <button class="btn-main" onclick="processGeoToUtm()"><svg class="icon" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg> Calcular UTM</button>
+        </div>
+    </div>
+
+    <!-- PESTAÑA: UTM A GEODÉSICAS -->
+    <div id="tab-utm2geo" class="tab-content">
+        <div class="grid-inputs">
+            <div>
+                <label for="input-east">Coordenada Este - X (m)</label>
+                <input type="text" id="input-east" placeholder="Ej: 480854.123" inputmode="decimal" autocomplete="off" onfocus="this.select()">
+            </div>
+            <div>
+                <label for="input-north">Coordenada Norte - Y (m)</label>
+                <input type="text" id="input-north" placeholder="Ej: 2136932.456" inputmode="decimal" autocomplete="off" onfocus="this.select()">
+            </div>
+        </div>
+
+        <div class="grid-inputs">
+            <div>
+                <label for="select-zone">Zona / Huso UTM</label>
+                <select id="select-zone"><option value="" disabled selected>-- Seleccione Zona --</option></select>
+            </div>
+            <div>
+                <label for="select-hemi">Hemisferio Origen</label>
+                <select id="select-hemi"><option value="Norte">Norte (N)</option><option value="Sur">Sur (S)</option></select>
+            </div>
+        </div>
+
+        <div class="btn-group">
+            <button class="btn-clear" onclick="clearInputs()"><svg class="icon" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 2.1-5.7L21 8"></path><path d="M21 2v6h-6"></path></svg> Limpiar Datos</button>
+            <button class="btn-main" onclick="processUtmToGeo()"><svg class="icon" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg> Calcular Geodésicas</button>
+        </div>
+    </div>
+
+    <div id="error-message" class="error-box"></div>
+
+    <!-- RESULTADOS -->
+    <div id="output-container" class="output-section">
+        <div class="result-banner"><svg class="icon" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg> CÁLCULO COMPLETADO CON ÉXITO</div>
+
+        <div class="location-badge">
+            <div style="display: flex; gap: 12px; align-items: center;">
+                <svg class="icon" style="width: 28px; height: 28px; color: var(--secondary);" viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                <div>
+                    <strong style="color: var(--primary);">Ubicación Geopolítica Estimada:</strong><br>
+                    <span id="txt-geopolitical" style="font-weight: 500;">Consultando base cartográfica...</span>
+                </div>
+            </div>
+            <button class="btn-copy-full" onclick="copyFullReport(this)"><svg class="icon" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg> Copiar Reporte General</button>
+        </div>
+
+        <div class="results-columns">
+            <div class="column-card">
+                <div>
+                    <p class="column-title">SISTEMA GEODÉSICO</p>
+                    <p class="data-label">Latitud</p><p class="data-value" id="res-geo-lat">-</p><p class="data-value dms-val" id="res-geo-dms-lat"></p>
+                    <p class="data-label">Longitud</p><p class="data-value" id="res-geo-lon">-</p><p class="data-value dms-val" id="res-geo-dms-lon"></p>
+                </div>
+                <button class="btn-copy-card" onclick="copyCardText('geodetic', this)"><svg class="icon" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg> Copiar Geodésicas</button>
+            </div>
+            <div class="column-card">
+                <div>
+                    <p class="column-title">SISTEMA PROYECTADO (UTM)</p>
+                    <p class="data-label">Coordenada Este (X)</p><p class="data-value" id="res-utm-east">-</p>
+                    <p class="data-label">Coordenada Norte (Y)</p><p class="data-value" id="res-utm-north">-</p>
+                    <p class="data-label">Parámetros Estatales</p><p class="data-value" id="res-utm-details" style="font-size: 15px;">-</p>
+                </div>
+                <button class="btn-copy-card" onclick="copyCardText('utm', this)"><svg class="icon" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg> Copiar Bloque UTM</button>
+            </div>
+        </div>
+
+        <div class="app-shortcut-box">
+            <div class="app-info"><h4>Formato para AutoCAD (X,Y):</h4><span id="string-acad">-</span></div>
+            <div class="action-group"><button class="badge-action btn-copy" onclick="copyDirectString(document.getElementById('string-acad').innerText, this)"><svg class="icon" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg> Copiar</button></div>
+        </div>
+        <div class="app-shortcut-box">
+            <div class="app-info"><h4>Ir a Google Maps:</h4><span id="string-gm">-</span></div>
+            <div class="action-group">
+                <button class="badge-action btn-open" onclick="openApp('maps')"><svg class="icon" viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg> Abrir App</button>
+                <button class="badge-action btn-copy" onclick="copyDirectString(document.getElementById('string-gm').innerText, this)"><svg class="icon" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg> Copiar</button>
+            </div>
+        </div>
+        <div class="app-shortcut-box">
+            <div class="app-info"><h4>Ir a Google Earth Pro:</h4><span id="string-ge">-</span></div>
+            <div class="action-group">
+                <button class="badge-action btn-open" onclick="openApp('earth')"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg> Abrir Web</button>
+                <button class="badge-action btn-copy" onclick="copyDirectString(document.getElementById('string-ge').innerText, this)"><svg class="icon" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg> Copiar</button>
+            </div>
+        </div>
+
+        <div class="map-container-wrapper">
+            <div id="map-preview"></div>
+            <button class="btn-recenter" onclick="recenterMap()"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><line x1="22" y1="12" x2="18" y2="12"></line><line x1="6" y1="12" x2="2" y2="12"></line><line x1="12" y1="6" x2="12" y2="2"></line><line x1="12" y1="22" x2="12" y2="18"></line></svg> Ubicar Punto</button>
+        </div>
+    </div>
+    <div class="footer"><strong>ESSCA</strong> • Herramienta de Precisión Topográfica WGS84</div>
+</div>
+
+<script>
+    // --- LÓGICA DEL SPLASH SCREEN ---
+    window.addEventListener('load', () => {
+        const splash = document.getElementById('splash-screen');
+        // Redujimos el tiempo total para que la transición sea ágil y no desespere al usuario
+        setTimeout(() => {
+            splash.style.opacity = '0';
+            splash.style.visibility = 'hidden';
+            setTimeout(() => { splash.style.display = 'none'; }, 800);
+        }, 4000); 
+    });
+
+    // === CONFIGURACIÓN Y MATEMÁTICAS ===
+    const zoneSelect = document.getElementById('select-zone');
+    for (let i = 1; i <= 60; i++) {
+        let opt = document.createElement('option');
+        opt.value = i;
+        opt.innerText = `Zona ${i}`;
+        if (i === 14) opt.selected = true;
+        zoneSelect.appendChild(opt);
+    }
+
+    const a = 6378137.0; 
+    const f = 1 / 298.257223563; 
+    const b = a * (1 - f); 
+    const e2 = (Math.pow(a,2) - Math.pow(b,2)) / Math.pow(a,2);
+    const ePrime2 = (Math.pow(a,2) - Math.pow(b,2)) / Math.pow(b,2);
+    
+    let currentMode = "geo2utm";
+    let mapInstance = null;
+    let markerInstance = null;
+    let lastCalculatedZone = null;
+    let lastCalculatedHemi = "Norte";
+
+    let stateGeo2Utm = null;
+    let stateUtm2Geo = null;
+
+    function degToRad(deg) { return deg * Math.PI / 180; }
+    function radToDeg(rad) { return rad * 180 / Math.PI; }
+
+    function toggleTheme() {
+        const body = document.documentElement;
+        const btn = document.querySelector('.theme-toggle span');
+        if (body.getAttribute('data-theme') === 'dark') { body.removeAttribute('data-theme'); btn.innerText = "Oscuro"; } 
+        else { body.setAttribute('data-theme', 'dark'); btn.innerText = "Claro"; }
+    }
+
+    function switchTab(mode) {
+        currentMode = mode;
+        document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+        document.getElementById('error-message').style.display = 'none';
+
+        if(mode === 'geo2utm') {
+            document.getElementById('btn-tab-geo').classList.add('active');
+            document.getElementById('tab-geo2utm').classList.add('active');
+            if(stateGeo2Utm) renderOutputsOnScreen(stateGeo2Utm.lat, stateGeo2Utm.lon, stateGeo2Utm.east, stateGeo2Utm.north, stateGeo2Utm.zone, stateGeo2Utm.letter, stateGeo2Utm.hemi, false);
+            else document.getElementById('output-container').style.display = 'none';
+        } else {
+            document.getElementById('btn-tab-utm').classList.add('active');
+            document.getElementById('tab-utm2geo').classList.add('active');
+            if(lastCalculatedZone) { document.getElementById('select-zone').value = lastCalculatedZone; document.getElementById('select-hemi').value = lastCalculatedHemi; }
+            if(stateUtm2Geo) renderOutputsOnScreen(stateUtm2Geo.lat, stateUtm2Geo.lon, stateUtm2Geo.east, stateUtm2Geo.north, stateUtm2Geo.zone, stateUtm2Geo.letter, stateUtm2Geo.hemi, false);
+            else document.getElementById('output-container').style.display = 'none';
+        }
+    }
+
+    function toggleGeoInputFormat() {
+        const format = document.querySelector('input[name="geo-format"]:checked').value;
+        const groupDD = document.getElementById('input-group-dd');
+        const groupDMS = document.getElementById('input-group-dms');
+        if(format === 'dd') { groupDD.style.display = 'grid'; groupDMS.style.display = 'none'; } 
+        else { groupDD.style.display = 'none'; groupDMS.style.display = 'block'; }
+    }
+
+    function clearInputs() {
+        document.querySelectorAll('input[type="text"]').forEach(input => input.value = '');
+        document.getElementById('output-container').style.display = 'none';
+        document.getElementById('error-message').style.display = 'none';
+        if(currentMode === 'geo2utm') stateGeo2Utm = null;
+        if(currentMode === 'utm2geo') stateUtm2Geo = null;
+    }
+
+    function convertDDtoDMS(dd, isLat) {
+        let absDd = Math.abs(dd); let d = Math.floor(absDd); let mFloat = (absDd - d) * 60; let m = Math.floor(mFloat); let s = (mFloat - m) * 60;
+        let dir = isLat ? (dd >= 0 ? "N" : "S") : (dd >= 0 ? "E" : "W");
+        return `${d}° ${m}' ${s.toFixed(4)}" ${dir}`;
+    }
+
+    function convertDMSToDD(d, m, s, dir) {
+        let deg = Math.abs(Number(d || 0)); let min = Math.abs(Number(m || 0)) / 60; let sec = Math.abs(Number(s || 0)) / 3600;
+        return (deg + min + sec) * Number(dir);
+    }
+
+    function getUtmLetterDesignator(lat) {
+        if ((84 >= lat) && (lat >= 72)) return 'X'; else if ((72 > lat) && (lat >= 64)) return 'W'; else if ((64 > lat) && (lat >= 56)) return 'V'; else if ((56 > lat) && (lat >= 48)) return 'U'; else if ((48 > lat) && (lat >= 40)) return 'T'; else if ((40 > lat) && (lat >= 32)) return 'S'; else if ((32 > lat) && (lat >= 24)) return 'R'; else if ((24 > lat) && (lat >= 16)) return 'Q'; else if ((16 > lat) && (lat >= 8)) return 'P'; else if ((8 > lat) && (lat >= 0)) return 'N'; else if ((0 > lat) && (lat >= -8)) return 'M'; else if ((-8 > lat) && (lat >= -16)) return 'L'; else if ((-16 > lat) && (lat >= -24)) return 'K'; else if ((-24 > lat) && (lat >= -32)) return 'J'; else if ((-32 > lat) && (lat >= -40)) return 'H'; else if ((-40 > lat) && (lat >= -48)) return 'G'; else if ((-48 > lat) && (lat >= -56)) return 'F'; else if ((-56 > lat) && (lat >= -64)) return 'E'; else if ((-64 > lat) && (lat >= -72)) return 'D'; else if ((-72 > lat) && (lat >= -80)) return 'C'; else return 'Z'; 
+    }
+
+    function geodeticToUtm(lat, lon) {
+        let lonRad = degToRad(lon); let latRad = degToRad(lat); let zone = Math.floor((lon + 180) / 6) + 1;
+        if (lat >= 56.0 && lat < 64.0 && lon >= 3.0 && lon < 12.0) zone = 32;
+        if (lat >= 72.0 && lat < 84.0) { if (lon >= 0.0 && lon < 9.0) zone = 31; else if (lon >= 9.0 && lon < 21.0) zone = 33; else if (lon >= 21.0 && lon < 33.0) zone = 35; else if (lon >= 33.0 && lon < 42.0) zone = 37; }
+        let lonOrigin = (zone - 1) * 6 - 180 + 3; let lonOriginRad = degToRad(lonOrigin);
+        let n = a / Math.sqrt(1 - e2 * Math.sin(latRad) * Math.sin(latRad)); let t = Math.tan(latRad) * Math.tan(latRad); let c = ePrime2 * Math.cos(latRad) * Math.cos(latRad); let aTerm = Math.cos(latRad) * (lonRad - lonOriginRad);
+        let m = a * ((1 - e2 / 4 - 3 * Math.pow(e2, 2) / 64 - 5 * Math.pow(e2, 3) / 256) * latRad - (3 * e2 / 8 + 3 * Math.pow(e2, 2) / 32 + 45 * Math.pow(e2, 3) / 1024) * Math.sin(2 * latRad) + (15 * Math.pow(e2, 2) / 256 + 45 * Math.pow(e2, 3) / 1024) * Math.sin(4 * latRad) - (35 * Math.pow(e2, 3) / 3072) * Math.sin(6 * latRad));
+        let k0 = 0.9996; let x = k0 * n * (aTerm + (1 - t + c) * Math.pow(aTerm, 3) / 6 + (5 - 18 * t + Math.pow(t, 2) + 72 * c - 58 * ePrime2) * Math.pow(aTerm, 5) / 120) + 500000.0;
+        let y = k0 * (m + n * Math.tan(latRad) * (Math.pow(aTerm, 2) / 2 + (5 - t + 9 * c + 4 * Math.pow(c, 2)) * Math.pow(aTerm, 4) / 24 + (61 - 58 * t + Math.pow(t, 2) + 600 * c - 330 * ePrime2) * Math.pow(aTerm, 6) / 720));
+        if (lat < 0) { y += 10000000.0; } let letter = getUtmLetterDesignator(lat);
+        return { zone: zone, letter: letter, easting: x.toFixed(3), northing: y.toFixed(3) };
+    }
+
+    function utmToGeodetic(east, north, zone, hemi) {
+        let k0 = 0.9996; let x = east - 500000.0; let y = north; if (hemi === "Sur") { y -= 10000000.0; }
+        let e1 = (1 - Math.sqrt(1 - e2)) / (1 + Math.sqrt(1 - e2)); let m = y / k0; let mu = m / (a * (1 - e2 / 4 - 3 * Math.pow(e2, 2) / 64 - 5 * Math.pow(e2, 3) / 256));
+        let phi1Rad = mu + (3 * e1 / 2 - 27 * Math.pow(e1, 3) / 32) * Math.sin(2 * mu) + (21 * Math.pow(e1, 2) / 16 - 55 * Math.pow(e1, 4) / 32) * Math.sin(4 * mu) + (151 * Math.pow(e1, 3) / 96) * Math.sin(6 * mu);
+        let t1 = Math.tan(phi1Rad) * Math.tan(phi1Rad); let c1 = ePrime2 * Math.cos(phi1Rad) * Math.cos(phi1Rad); let n1 = a / Math.sqrt(1 - e2 * Math.sin(phi1Rad) * Math.sin(phi1Rad)); let r1 = a * (1 - e2) / Math.pow(1 - e2 * Math.sin(phi1Rad) * Math.sin(phi1Rad), 1.5); let d = x / (n1 * k0);
+        let latRad = phi1Rad - (n1 * Math.tan(phi1Rad) / r1) * (Math.pow(d, 2) / 2 - (5 + 3 * t1 + 10 * c1 - 4 * Math.pow(c1, 2) - 9 * ePrime2) * Math.pow(d, 4) / 24 + (61 + 90 * t1 + 298 * c1 + 45 * Math.pow(t1, 2) - 252 * ePrime2 - 3 * Math.pow(c1, 2)) * Math.pow(d, 6) / 720);
+        let lonRad = (d - (1 + 2 * t1 + c1) * Math.pow(d, 3) / 6 + (5 - 2 * c1 + 28 * t1 - 3 * Math.pow(c1, 2) + 8 * ePrime2 + 24 * Math.pow(t1, 2)) * Math.pow(d, 5) / 120) / Math.cos(phi1Rad);
+        let lonOrigin = (zone - 1) * 6 - 180 + 3; let lat = radToDeg(latRad); let lon = lonOrigin + radToDeg(lonRad);
+        return { latitude: lat, longitude: lon };
+    }
+
+    function fetchGeopoliticalLocation(lat, lon) {
+        document.getElementById('txt-geopolitical').innerText = "Consultando base cartográfica...";
+        fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=10&addressdetails=1`)
+            .then(response => response.json())
+            .then(data => {
+                if(data && data.address) {
+                    let country = data.address.country || ""; let state = data.address.state || data.address.region || ""; let county = data.address.county || data.address.city || data.address.town || "";
+                    let locationParts = [county, state, country].filter(part => part !== "").join(", ");
+                    document.getElementById('txt-geopolitical').innerText = locationParts || "Coordenadas en zona no delimitada políticamente";
+                } else { document.getElementById('txt-geopolitical').innerText = "Información geopolítica ausente para este sector."; }
+            }).catch(() => { document.getElementById('txt-geopolitical').innerText = "Cálculo operado localmente (Sin conexión a cartografía)"; });
+    }
+
+    function renderOutputsOnScreen(lat, lon, east, north, zone, letter, hemi, saveNewState = true) {
+        document.getElementById('error-message').style.display = 'none';
+        lastCalculatedZone = zone; lastCalculatedHemi = hemi.includes("Norte") ? "Norte" : "Sur";
+        if(saveNewState) { let stateObj = { lat, lon, east, north, zone, letter, hemi }; if(currentMode === 'geo2utm') stateGeo2Utm = stateObj; else stateUtm2Geo = stateObj; }
+
+        document.getElementById('res-geo-lat').innerText = lat.toFixed(8) + "°";
+        document.getElementById('res-geo-lon').innerText = lon.toFixed(8) + "°";
+        document.getElementById('res-geo-dms-lat').innerText = convertDDtoDMS(lat, true);
+        document.getElementById('res-geo-dms-lon').innerText = convertDDtoDMS(lon, false);
+        
+        document.getElementById('res-utm-east').innerText = parseFloat(east).toLocaleString('en-US', {minimumFractionDigits: 3, useGrouping: true}) + " m";
+        document.getElementById('res-utm-north').innerText = parseFloat(north).toLocaleString('en-US', {minimumFractionDigits: 3, useGrouping: true}) + " m";
+        document.getElementById('res-utm-details').innerText = `Zona UTM: ${zone}${letter} - ${hemi}`;
+
+        document.getElementById('string-gm').innerText = `${lat.toFixed(8)}, ${lon.toFixed(8)}`;
+        document.getElementById('string-ge').innerText = `${zone}${letter} ${parseFloat(east).toFixed(3)} ${parseFloat(north).toFixed(3)}`;
+        document.getElementById('string-acad').innerText = `${parseFloat(east).toFixed(3)},${parseFloat(north).toFixed(3)}`;
+
+        document.getElementById('output-container').style.display = 'block';
+        fetchGeopoliticalLocation(lat, lon);
+
+        setTimeout(() => {
+            if (!mapInstance) {
+                mapInstance = L.map('map-preview').setView([lat, lon], 16);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(mapInstance);
+                markerInstance = L.marker([lat, lon]).addTo(mapInstance);
+            } else { mapInstance.setView([lat, lon], 16); markerInstance.setLatLng([lat, lon]); }
+            mapInstance.invalidateSize();
+        }, 200);
+    }
+
+    function recenterMap() {
+        let lat = parseFloat(document.getElementById('res-geo-lat').innerText.replace('°','')); let lon = parseFloat(document.getElementById('res-geo-lon').innerText.replace('°',''));
+        if(mapInstance && !isNaN(lat) && !isNaN(lon)) { mapInstance.setView([lat, lon], 16, { animate: true, duration: 0.5 }); }
+    }
+
+    function openApp(appName) {
+        let lat = document.getElementById('res-geo-lat').innerText.replace('°','').trim(); let lon = document.getElementById('res-geo-lon').innerText.replace('°','').trim();
+        if(!lat || lat === '-') return;
+        if(appName === 'maps') window.open(`https://www.google.com/maps/search/?api=1&query=${lat},${lon}`, '_blank');
+        else if(appName === 'earth') window.open(`https://earth.google.com/web/search/${lat},${lon}`, '_blank');
+    }
+
+    function showError(msg) { const errDiv = document.getElementById('error-message'); errDiv.innerHTML = msg; errDiv.style.display = 'block'; document.getElementById('output-container').style.display = 'none'; }
+
+    function processGeoToUtm() {
+        const format = document.querySelector('input[name="geo-format"]:checked').value; let lat, lon;
+        if (format === 'dd') {
+            let latIn = document.getElementById('input-lat').value.trim(); let lonIn = document.getElementById('input-lon').value.trim();
+            if(!latIn || !lonIn) return showError("<strong>Campos Incompletos:</strong> Ingrese los valores Decimales.");
+            lat = Number(latIn); lon = Number(lonIn);
+        } else {
+            let latD = document.getElementById('lat-d').value.trim(); let latM = document.getElementById('lat-m').value.trim(); let latS = document.getElementById('lat-s').value.trim(); let latDir = document.getElementById('lat-dir').value;
+            let lonD = document.getElementById('lon-d').value.trim(); let lonM = document.getElementById('lon-m').value.trim(); let lonS = document.getElementById('lon-s').value.trim(); let lonDir = document.getElementById('lon-dir').value;
+            if(!latD || !lonD) return showError("<strong>Campos Incompletos:</strong> Ingrese al menos los Grados.");
+            if(isNaN(latD) || isNaN(latM) || isNaN(latS) || isNaN(lonD) || isNaN(lonM) || isNaN(lonS)) return showError("<strong>Error de Sintaxis:</strong> Ingrese únicamente números.");
+            lat = convertDMSToDD(latD, latM, latS, latDir); lon = convertDMSToDD(lonD, lonM, lonS, lonDir);
+        }
+        if(isNaN(lat) || isNaN(lon)) return showError("<strong>Error de Sintaxis:</strong> Ingrese únicamente valores numéricos.");
+        if(lat < -90 || lat > 90 || lon < -180 || lon > 180) return showError("<strong>Fuera de Rango:</strong> Las coordenadas exceden los límites geométricos.");
+        if(lat < -80 || lat > 84) return showError("<strong>Límite del Sistema:</strong> El sistema UTM no tiene validez en los polos.");
+        let utm = geodeticToUtm(lat, lon);
+        renderOutputsOnScreen(lat, lon, utm.easting, utm.northing, utm.zone, utm.letter, lat >= 0 ? "Hemisferio Norte" : "Hemisferio Sur", true);
+    }
+
+    function processUtmToGeo() {
+        let eastIn = document.getElementById('input-east').value.trim(); let northIn = document.getElementById('input-north').value.trim(); let zoneVal = document.getElementById('select-zone').value; let hemi = document.getElementById('select-hemi').value;
+        if(!zoneVal) return showError("<strong>Configuración Requerida:</strong> Debe seleccionar obligatoriamente una Zona UTM.");
+        if(!eastIn || !northIn) return showError("<strong>Campos Incompletos:</strong> Ingrese los datos métricos Este y Norte.");
+        let east = Number(eastIn); let north = Number(northIn); let zone = Number(zoneVal);
+        if(isNaN(east) || isNaN(north)) return showError("<strong>Error de Sintaxis:</strong> Ingrese únicamente valores numéricos.");
+        if(east < 100000 || east > 900000) return showError("<strong>Este (X) fuera de rango:</strong> Valores normales entre 100,000 y 90,000 metros.");
+        if(north < 0 || north > 10000000) return showError("<strong>Norte (Y) fuera de rango:</strong> Valores entre 0 y 10,000,000 m.");
+        let geo = utmToGeodetic(east, north, zone, hemi);
+        renderOutputsOnScreen(geo.latitude, geo.longitude, east.toFixed(3), north.toFixed(3), zone, getUtmLetterDesignator(geo.latitude), `Hemisferio ${hemi}`, true);
+    }
+
+    function fallbackCopyTextToClipboard(text) {
+        var textArea = document.createElement("textarea"); textArea.value = text; textArea.style.position = "fixed";  document.body.appendChild(textArea); textArea.focus(); textArea.select();
+        try { document.execCommand('copy'); } catch (err) {} document.body.removeChild(textArea);
+    }
+
+    function secureClipboardCopy(text, btnElement) {
+        let originalHTML = btnElement.innerHTML;
+        if (!navigator.clipboard || window.location.protocol === 'file:') { fallbackCopyTextToClipboard(text); flashButtonSuccess(btnElement, originalHTML); return; }
+        navigator.clipboard.writeText(text).then(() => { flashButtonSuccess(btnElement, originalHTML); }).catch(() => { fallbackCopyTextToClipboard(text); flashButtonSuccess(btnElement, originalHTML); });
+    }
+
+    function flashButtonSuccess(btnElement, originalHTML) {
+        btnElement.innerHTML = `<svg class="icon" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"></path></svg> ¡Copiado!`;
+        btnElement.style.background = "#15803d"; btnElement.style.color = "#ffffff";
+        setTimeout(() => { btnElement.innerHTML = originalHTML; btnElement.style.background = ""; btnElement.style.color = ""; }, 1500);
+    }
+
+    function copyCardText(type, btnElement) {
+        let txt = "";
+        if(type === 'geodetic') {
+            let lat = document.getElementById('res-geo-lat').innerText; let dmsLat = document.getElementById('res-geo-dms-lat').innerText;
+            let lon = document.getElementById('res-geo-lon').innerText; let dmsLon = document.getElementById('res-geo-dms-lon').innerText;
+            txt = `*COORDENADAS GEODÉSICAS*\nLatitud: ${lat}  (${dmsLat})\nLongitud: ${lon}  (${dmsLon})`;
+        } else {
+            let east = document.getElementById('res-utm-east').innerText.replace(/,/g, ''); let north = document.getElementById('res-utm-north').innerText.replace(/,/g, '');
+            txt = `*COORDENADAS UTM*\nEste (X): ${east}\nNorte (Y): ${north}\n${document.getElementById('res-utm-details').innerText}`;
+        }
+        secureClipboardCopy(txt, btnElement);
+    }
+
+    function copyDirectString(str, btnElement) { secureClipboardCopy(str, btnElement); }
+
+    function copyFullReport(btnElement) {
+        let geopol = document.getElementById('txt-geopolitical').innerText; let lat = document.getElementById('res-geo-lat').innerText; let dmsLat = document.getElementById('res-geo-dms-lat').innerText; let lon = document.getElementById('res-geo-lon').innerText; let dmsLon = document.getElementById('res-geo-dms-lon').innerText; let east = document.getElementById('res-utm-east').innerText.replace(/,/g, ''); let north = document.getElementById('res-utm-north').innerText.replace(/,/g, ''); let zone = document.getElementById('res-utm-details').innerText;
+        let fullText = `*REPORTE DE COORDENADAS (WGS84) - ESSCA*\n\n📍 Ubicación: ${geopol}\n\n🌐 GEODÉSICAS:\nLatitud: ${lat}  (${dmsLat})\nLongitud: ${lon}  (${dmsLon})\n\n🗺️ UTM:\nEste: ${east}\nNorte: ${north}\n${zone}\n\n🔗 Google Maps: ${lat.replace('°','').trim()}, ${lon.replace('°','').trim()}`;
+        secureClipboardCopy(fullText, btnElement);
+    }
+</script>
+
+</body>
+</html>
